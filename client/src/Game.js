@@ -20,6 +20,11 @@ function Game({ players, room, orientation, cleanup }) {
   const [fen, setFen] = useState(chess.fen());
   const [over, setOver] = useState("");
 
+  const [time, setTime] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const seconds = Math.floor((time % 6000) / 100);
+  const milliseconds = time % 100;
+
   const makeAMove = useCallback(
     (move) => {
       try {
@@ -49,13 +54,16 @@ function Game({ players, room, orientation, cleanup }) {
   );
 
   function onDrop(sourceSquare, targetSquare) {
+    setIsRunning(false);
+
     if (chess.turn() !== orientation[0]) return false;
     if (players.length < 2) return false;
 
+    const color = chess.turn();
     const moveData = {
       from: sourceSquare,
       to: targetSquare,
-      color: chess.turn(),
+      color: color,
       promotion: "q",
     };
 
@@ -66,32 +74,54 @@ function Game({ players, room, orientation, cleanup }) {
     socket.emit("move", {
       move,
       room,
+      color,
+      seconds,
+      milliseconds
     });
 
     return true;
   }
 
   useEffect(() => {
-    socket.on("move", (move) => {
-      makeAMove(move); //
+    socket.on("opponentJoined", () => {
+      setIsRunning(true);
     });
   }, [makeAMove]);
 
+  useEffect(() => {
+    socket.on("move", (move) => {
+      makeAMove(move);
+      setTime(0);
+      if (!chess.isGameOver()) {
+        setIsRunning(true);
+      }
+    });
+  }, [makeAMove]);
 
   useEffect(() => {
     socket.on('playerDisconnected', (player) => {
+      setIsRunning(false);
       setOver(`${player.username} отключился от игры`);
     });
   }, []);
 
   useEffect(() => {
     socket.on('closeRoom', ({ roomId }) => {
+      setIsRunning(false);
       console.log('closeRoom', roomId, room)
       if (roomId === room) {
         cleanup();
       }
     });
   }, [room, cleanup]);
+
+  useEffect(() => {
+    let intervalId;
+    if (isRunning) {
+      intervalId = setInterval(() => setTime(time + 1), 10);
+    }
+    return () => clearInterval(intervalId);
+  }, [isRunning, time]);
 
   return (
     <Stack>
@@ -122,8 +152,8 @@ function Game({ players, room, orientation, cleanup }) {
                 </ListItem>
               ))}
             </List>
-          </Box>
-        )}
+            <ListSubheader>Время: {seconds.toString().padStart(2, "0")}:{milliseconds.toString().padStart(2, "0")}</ListSubheader>
+          </Box>)}
       </Stack>
       <CustomDialog
         open={Boolean(over)}

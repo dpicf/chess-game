@@ -71,6 +71,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('move', (data) => {
+    console.log(
+      'Time to move. Color: '+data.color,
+      ' time: '+data.seconds.toString().padStart(2, "0")+':'+data.milliseconds.toString().padStart(2, "0")
+    );
     socket.to(data.room).emit('move', data.move);
   });
 
